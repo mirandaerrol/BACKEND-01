@@ -1,0 +1,7 @@
+﻿flask
+flask-cors
+ultralytics
+easyocr
+mysql-connector-python
+opencv-python-headless
+numpy
