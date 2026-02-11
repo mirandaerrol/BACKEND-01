@@ -19,20 +19,22 @@ plate_model = YOLO("best.pt")
 reader = easyocr.Reader(['en'])
 
 # RTSP stream URL
-# Use your local camera IP here since you are running this on your laptop
+# Use your local camera IP here
 rtsp_url = "rtsp://tplink-tc65:12345678@192.168.100.81:554/stream"
 
 ALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}
 PLATE_LOGGING_COOLDOWN_SECONDS = 10
 
 # Database Configuration
-# UPDATED: We use the defaults below for your LOCAL run.
-# REPLACE these values with the PUBLIC details from Railway "Connect" tab.
-DB_HOST = os.getenv("DB_HOST", "gondola.proxy.rlwy.net") # Paste your Public Host here
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "fPhJPWGoVqexGKEPptvyakntypRCoaHz") # Paste your Password
-DB_NAME = os.getenv("DB_NAME", "railway")
-DB_PORT = int(os.getenv("DB_PORT", 26967)) # Paste your Public Port here (NOT 3306)
+# ---------------------------------------------------------
+# UPDATED: Removed os.getenv to FORCE connection via Public URL
+# This ignores Railway's internal variables and uses these values directly.
+# ---------------------------------------------------------
+DB_HOST = "gondola.proxy.rlwy.net"
+DB_USER = "root"
+DB_PASSWORD = "fPhJPWGoVqexGKEPptvyakntypRCoaHz" 
+DB_NAME = "railway"
+DB_PORT = 26967
 
 try:
     db_pool = pooling.MySQLConnectionPool(
@@ -55,7 +57,6 @@ def get_db_connection():
         raise Exception("Database not connected")
     return db_pool.get_connection()
 
-# ... (rest of the functions: clean_plate_text, is_valid_ph_plate, etc. remain the same)
 def clean_plate_text(raw_text):
     text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
     return text if 4 <= len(text) <= 8 else None
@@ -168,7 +169,6 @@ def update_time_out(time_log_id):
         print(f"DB Error: {e}")
 
 def generate_frames():
-    # Attempt to open RTSP stream
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Could not open RTSP stream at {rtsp_url}")
@@ -334,4 +334,5 @@ def latest_detection():
         return jsonify({"message": "Database Error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
