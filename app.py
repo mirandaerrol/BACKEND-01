@@ -10,6 +10,9 @@ import re
 from datetime import datetime, timedelta
 import os
 
+#pip install opencv-python numpy flask flask-cors ultralytics easyocr mysql-connector-python
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -19,17 +22,14 @@ plate_model = YOLO("best.pt")
 reader = easyocr.Reader(['en'])
 
 # RTSP stream URL
-# Use your local camera IP here
-rtsp_url = "rtsp://tplink-tc65:12345678@192.168.100.81:554/stream"
+# LOCAL CAMERA IP (Hybrid Mode)
+rtsp_url = "rtsp://tplink-tc65:12345678@192.168.100.81:554/stream1"
 
 ALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}
 PLATE_LOGGING_COOLDOWN_SECONDS = 10
 
 # Database Configuration
-# ---------------------------------------------------------
-# UPDATED: Removed os.getenv to FORCE connection via Public URL
-# This ignores Railway's internal variables and uses these values directly.
-# ---------------------------------------------------------
+# HYBRID MODE: Connects Local App -> Cloud Database (Railway Public URL)
 DB_HOST = "gondola.proxy.rlwy.net"
 DB_USER = "root"
 DB_PASSWORD = "fPhJPWGoVqexGKEPptvyakntypRCoaHz" 
@@ -47,7 +47,7 @@ try:
         database=DB_NAME,
         port=DB_PORT
     )
-    print(f"Database connection pool created successfully at {DB_HOST}:{DB_PORT}")
+    print(f"HYBRID MODE: Connected to Cloud DB at {DB_HOST}:{DB_PORT}")
 except mysql.connector.Error as err:
     print(f"Error creating database pool: {err}")
     db_pool = None
@@ -335,4 +335,4 @@ def latest_detection():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=True, threaded=True)
