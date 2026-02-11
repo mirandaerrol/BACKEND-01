@@ -1,0 +1,14 @@
+pycache
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.env
+*.mp4
+*.avi
+*.mov
+.git
+.gitignore
+Dockerfile
