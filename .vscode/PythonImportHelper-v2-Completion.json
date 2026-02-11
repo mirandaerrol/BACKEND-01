@@ -1,0 +1,273 @@
+[
+    {
+        "label": "cv2",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "cv2",
+        "description": "cv2",
+        "detail": "cv2",
+        "documentation": {}
+    },
+    {
+        "label": "numpy",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "numpy",
+        "description": "numpy",
+        "detail": "numpy",
+        "documentation": {}
+    },
+    {
+        "label": "Flask",
+        "importPath": "flask",
+        "description": "flask",
+        "isExtraImport": true,
+        "detail": "flask",
+        "documentation": {}
+    },
+    {
+        "label": "Response",
+        "importPath": "flask",
+        "description": "flask",
+        "isExtraImport": true,
+        "detail": "flask",
+        "documentation": {}
+    },
+    {
+        "label": "jsonify",
+        "importPath": "flask",
+        "description": "flask",
+        "isExtraImport": true,
+        "detail": "flask",
+        "documentation": {}
+    },
+    {
+        "label": "CORS",
+        "importPath": "flask_cors",
+        "description": "flask_cors",
+        "isExtraImport": true,
+        "detail": "flask_cors",
+        "documentation": {}
+    },
+    {
+        "label": "YOLO",
+        "importPath": "ultralytics",
+        "description": "ultralytics",
+        "isExtraImport": true,
+        "detail": "ultralytics",
+        "documentation": {}
+    },
+    {
+        "label": "easyocr",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "easyocr",
+        "description": "easyocr",
+        "detail": "easyocr",
+        "documentation": {}
+    },
+    {
+        "label": "mysql.connector",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "mysql.connector",
+        "description": "mysql.connector",
+        "detail": "mysql.connector",
+        "documentation": {}
+    },
+    {
+        "label": "pooling",
+        "importPath": "mysql.connector",
+        "description": "mysql.connector",
+        "isExtraImport": true,
+        "detail": "mysql.connector",
+        "documentation": {}
+    },
+    {
+        "label": "re",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "re",
+        "description": "re",
+        "detail": "re",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "get_db_connection",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def get_db_connection():\n    return db_pool.get_connection()\ndef clean_plate_text(raw_text):\n    text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())\n    return text if 4 <= len(text) <= 8 else None\ndef correct_ocr_errors(text):\n    \"\"\"\n    Attempts to fix common OCR confusions based on standard PH formats.\n    Updated to handle both LLL-DDD and DDD-LLL formats.\n    \"\"\"",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "clean_plate_text",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def clean_plate_text(raw_text):\n    text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())\n    return text if 4 <= len(text) <= 8 else None\ndef correct_ocr_errors(text):\n    \"\"\"\n    Attempts to fix common OCR confusions based on standard PH formats.\n    Updated to handle both LLL-DDD and DDD-LLL formats.\n    \"\"\"\n    if not text or len(text) < 6: return text\n    chars = list(text)",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "correct_ocr_errors",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def correct_ocr_errors(text):\n    \"\"\"\n    Attempts to fix common OCR confusions based on standard PH formats.\n    Updated to handle both LLL-DDD and DDD-LLL formats.\n    \"\"\"\n    if not text or len(text) < 6: return text\n    chars = list(text)\n    # Dictionaries for correction\n    l2n = {'O': '0', 'I': '1', 'Q': '0', 'Z': '2', 'S': '5', 'G': '6', 'B': '8'}\n    n2l = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '6': 'G', '8': 'B'}",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "is_valid_ph_plate",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def is_valid_ph_plate(plate_text):\n    \"\"\"\n    Philippine license plate formats.\n    Updated regex to include:\n    - Standard: LLL DDD / LLL DDDD\n    - Reverse:  DDD LLL \n    - Motorcycle: LL DDDD / DDDD LL\n    \"\"\"\n    if not plate_text: return False\n    ph_plate_pattern = re.compile(r'^('",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "get_owner_info",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def get_owner_info(plate_text):\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor(dictionary=True)\n    try:\n        query = \"\"\"\n        SELECT v.vehicle_id, v.plate_number, v.vehicle_type,\n               vo.rfid_code, vo.owner_id, vo.f_name, vo.l_name, vo.contact_number\n        FROM vehicles v\n        LEFT JOIN vehicle_owner vo ON v.owner_id = vo.owner_id\n        WHERE v.plate_number = %s",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "insert_log",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def insert_log(vehicle_id=None, owner_id=None, rfid_code=None, detected_plate=None, detection_method=\"PLATE\", vehicle_type=None):\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor()\n    try:\n        cursor.execute(\"\"\"\n            INSERT INTO logs (vehicle_id, owner_id, rfid_code, detected_plate_number, detection_method, vehicle_type, created_at, updated_at)\n            VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())\n        \"\"\", (vehicle_id, owner_id, rfid_code, detected_plate, detection_method, vehicle_type))\n        logs_id = cursor.lastrowid\n        cursor.execute(\"\"\"",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "check_for_open_log",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def check_for_open_log(vehicle_id):\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor(dictionary=True)\n    try:\n        query = \"\"\"\n            SELECT tl.time_log_id\n            FROM time_log tl\n            JOIN logs l ON tl.logs_id = l.logs_id\n            WHERE l.vehicle_id = %s AND tl.time_out IS NULL\n            ORDER BY tl.time_in DESC",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "update_time_out",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def update_time_out(time_log_id):\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor()\n    try:\n        query = \"\"\"\n            UPDATE time_log\n            SET time_out = NOW(), updated_at = NOW()\n            WHERE time_log_id = %s\n        \"\"\"\n        cursor.execute(query, (time_log_id,))",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "generate_frames",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def generate_frames():\n    cap = cv2.VideoCapture(rtsp_url)\n    if not cap.isOpened():\n        print(f\"Error: Could not open RTSP stream at {rtsp_url}\")\n        return\n    recently_detected_plates = {}\n    while True:\n        success, frame = cap.read()\n        if not success:\n            print(\"Failed to grab frame, retrying...\")",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "video_feed",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def video_feed():\n    return Response(generate_frames(), mimetype=\"multipart/x-mixed-replace; boundary=frame\")\n@app.route(\"/latest_detection\")\ndef latest_detection():\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor(dictionary=True)\n    try:\n        cursor.execute(\"\"\"\n            SELECT \n                l.logs_id, l.created_at, l.detected_plate_number, l.detection_method, l.vehicle_type as log_vehicle_type,",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "latest_detection",
+        "kind": 2,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "def latest_detection():\n    db_conn = get_db_connection()\n    cursor = db_conn.cursor(dictionary=True)\n    try:\n        cursor.execute(\"\"\"\n            SELECT \n                l.logs_id, l.created_at, l.detected_plate_number, l.detection_method, l.vehicle_type as log_vehicle_type,\n                t.time_in, t.time_out, t.updated_at,\n                v.plate_number, v.vehicle_type as db_vehicle_type,\n                o.f_name, o.l_name, o.contact_number",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "app = Flask(__name__)\nCORS(app)\nvehicle_model = YOLO(\"yolov8n.pt\")\nplate_model = YOLO(\"best.pt\")\nreader = easyocr.Reader(['en'])\n# RTSP stream URL\n# TP LINK TC65     rtsp_url = \"rtsp://tplink-tc65:camerasource@192.168.8.113.67.151.202:554/stream1\"\n# IP CAMERA MOBILE   rtsp_url = \"rtsp://192.168.8.111:8080/h264_ulaw.sdp\"\nrtsp_url = \"rtsp://tplink-tc65:54939893@192.168.8.113:554/stream1\"\nALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "vehicle_model",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "vehicle_model = YOLO(\"yolov8n.pt\")\nplate_model = YOLO(\"best.pt\")\nreader = easyocr.Reader(['en'])\n# RTSP stream URL\n# TP LINK TC65     rtsp_url = \"rtsp://tplink-tc65:camerasource@192.168.8.113.67.151.202:554/stream1\"\n# IP CAMERA MOBILE   rtsp_url = \"rtsp://192.168.8.111:8080/h264_ulaw.sdp\"\nrtsp_url = \"rtsp://tplink-tc65:54939893@192.168.8.113:554/stream1\"\nALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}\nPLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "plate_model",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "plate_model = YOLO(\"best.pt\")\nreader = easyocr.Reader(['en'])\n# RTSP stream URL\n# TP LINK TC65     rtsp_url = \"rtsp://tplink-tc65:camerasource@192.168.8.113.67.151.202:554/stream1\"\n# IP CAMERA MOBILE   rtsp_url = \"rtsp://192.168.8.111:8080/h264_ulaw.sdp\"\nrtsp_url = \"rtsp://tplink-tc65:54939893@192.168.8.113:554/stream1\"\nALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}\nPLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:\n    db_pool = pooling.MySQLConnectionPool(pool_name=\"mysql_pool\",",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "reader",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "reader = easyocr.Reader(['en'])\n# RTSP stream URL\n# TP LINK TC65     rtsp_url = \"rtsp://tplink-tc65:camerasource@192.168.8.113.67.151.202:554/stream1\"\n# IP CAMERA MOBILE   rtsp_url = \"rtsp://192.168.8.111:8080/h264_ulaw.sdp\"\nrtsp_url = \"rtsp://tplink-tc65:54939893@192.168.8.113:554/stream1\"\nALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}\nPLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:\n    db_pool = pooling.MySQLConnectionPool(pool_name=\"mysql_pool\",\n    pool_size=5,",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "rtsp_url",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "rtsp_url = \"rtsp://tplink-tc65:54939893@192.168.8.113:554/stream1\"\nALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}\nPLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:\n    db_pool = pooling.MySQLConnectionPool(pool_name=\"mysql_pool\",\n    pool_size=5,\n    pool_reset_session=True,\n    host=\"localhost\",\n    user=\"root\",\n    password=\"\",",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "ALLOWED_VEHICLE_CLASSES",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "ALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}\nPLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:\n    db_pool = pooling.MySQLConnectionPool(pool_name=\"mysql_pool\",\n    pool_size=5,\n    pool_reset_session=True,\n    host=\"localhost\",\n    user=\"root\",\n    password=\"\",\n    database=\"system_demo1\")",
+        "detail": "app",
+        "documentation": {}
+    },
+    {
+        "label": "PLATE_LOGGING_COOLDOWN_SECONDS",
+        "kind": 5,
+        "importPath": "app",
+        "description": "app",
+        "peekOfCode": "PLATE_LOGGING_COOLDOWN_SECONDS = 10\ntry:\n    db_pool = pooling.MySQLConnectionPool(pool_name=\"mysql_pool\",\n    pool_size=5,\n    pool_reset_session=True,\n    host=\"localhost\",\n    user=\"root\",\n    password=\"\",\n    database=\"system_demo1\")\n    print(\"Database connection pool created successfully.\")",
+        "detail": "app",
+        "documentation": {}
+    }
+]
