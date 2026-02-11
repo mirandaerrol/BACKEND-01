@@ -19,19 +19,20 @@ plate_model = YOLO("best.pt")
 reader = easyocr.Reader(['en'])
 
 # RTSP stream URL
-# Reads from Railway Variable 'RTSP_URL'. Defaults to local if missing.
-rtsp_url = os.getenv("RTSP_URL", "rtsp://172.20.10.4:8080/h264_ulaw.sdp")
+# Use your local camera IP here since you are running this on your laptop
+rtsp_url = "rtsp://tplink-tc65:12345678@192.168.100.81:554/stream"
 
 ALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}
 PLATE_LOGGING_COOLDOWN_SECONDS = 10
 
-# Database Configuration using Environment Variables
-# This allows the app to connect to Railway's database instead of localhost
-DB_HOST = os.getenv("DB_HOST", "localhost")
+# Database Configuration
+# UPDATED: We use the defaults below for your LOCAL run.
+# REPLACE these values with the PUBLIC details from Railway "Connect" tab.
+DB_HOST = os.getenv("DB_HOST", "gondola.proxy.rlwy.net") # Paste your Public Host here
 DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "system_demo1")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
+DB_PASSWORD = os.getenv("DB_PASSWORD", "fPhJPWGoVqexGKEPptvyakntypRCoaHz") # Paste your Password
+DB_NAME = os.getenv("DB_NAME", "railway")
+DB_PORT = int(os.getenv("DB_PORT", 26967)) # Paste your Public Port here (NOT 3306)
 
 try:
     db_pool = pooling.MySQLConnectionPool(
@@ -44,7 +45,7 @@ try:
         database=DB_NAME,
         port=DB_PORT
     )
-    print(f"Database connection pool created successfully at {DB_HOST}")
+    print(f"Database connection pool created successfully at {DB_HOST}:{DB_PORT}")
 except mysql.connector.Error as err:
     print(f"Error creating database pool: {err}")
     db_pool = None
@@ -54,6 +55,7 @@ def get_db_connection():
         raise Exception("Database not connected")
     return db_pool.get_connection()
 
+# ... (rest of the functions: clean_plate_text, is_valid_ph_plate, etc. remain the same)
 def clean_plate_text(raw_text):
     text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
     return text if 4 <= len(text) <= 8 else None
@@ -166,6 +168,7 @@ def update_time_out(time_log_id):
         print(f"DB Error: {e}")
 
 def generate_frames():
+    # Attempt to open RTSP stream
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Could not open RTSP stream at {rtsp_url}")
@@ -331,6 +334,4 @@ def latest_detection():
         return jsonify({"message": "Database Error"}), 500
 
 if __name__ == "__main__":
-    # Railway uses PORT env var
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
