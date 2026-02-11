@@ -2,7 +2,6 @@
 FROM python:3.9-slim
 
 # Install system dependencies required for OpenCV
-# UPDATED: Changed 'libgl1-mesa-glx' to 'libgl1' for newer Debian versions
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
@@ -11,13 +10,16 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy dependency file
+# 1. Install CPU-only PyTorch first (This saves about 4GB of space!)
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# 2. Copy requirements file
 COPY requirements.txt .
 
-# Install dependencies
+# 3. Install other dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# 4. Copy the rest of the application code
 COPY . .
 
 # Expose port 5000
