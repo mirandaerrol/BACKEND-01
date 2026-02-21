@@ -9,9 +9,10 @@ from mysql.connector import pooling
 import re
 from datetime import datetime, timedelta
 import os
+import time
 
-#pip install opencv-python numpy flask flask-cors ultralytics easyocr mysql-connector-python
-
+# FORCE OPENCV TO USE TCP FOR RTSP
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay"
 
 app = Flask(__name__)
 CORS(app)
@@ -22,19 +23,21 @@ plate_model = YOLO("best.pt")
 reader = easyocr.Reader(['en'])
 
 # RTSP stream URL
-# LOCAL CAMERA IP (Hybrid Mode)
 rtsp_url = "rtsp://tplink-tc65:12345678@192.168.100.81:554/stream1"
 
 ALLOWED_VEHICLE_CLASSES = {'car', 'motorcycle', 'bus', 'truck'}
 PLATE_LOGGING_COOLDOWN_SECONDS = 10
+# FIX: Added Minimum Stay Duration to prevent instant logout loops
+MIN_STAY_DURATION_FOR_LOGOUT = 60 
 
-# Database Configuration
-# HYBRID MODE: Connects Local App -> Cloud Database (Railway Public URL)
+# Database Configuration (Railway Public)
 DB_HOST = "gondola.proxy.rlwy.net"
 DB_USER = "root"
 DB_PASSWORD = "fPhJPWGoVqexGKEPptvyakntypRCoaHz" 
 DB_NAME = "railway"
 DB_PORT = 26967
+
+db_pool = None
 
 try:
     db_pool = pooling.MySQLConnectionPool(
@@ -45,7 +48,8 @@ try:
         user=DB_USER,
         password=DB_PASSWORD,
         database=DB_NAME,
-        port=DB_PORT
+        port=DB_PORT,
+        connection_timeout=60
     )
     print(f"HYBRID MODE: Connected to Cloud DB at {DB_HOST}:{DB_PORT}")
 except mysql.connector.Error as err:
@@ -110,7 +114,8 @@ def insert_log(vehicle_id=None, owner_id=None, rfid_code=None, detected_plate=No
                 VALUES (%s, NOW(), NOW(), NOW())
             """, (logs_id,))
             db_conn.commit()
-            print(f"SUCCESS: Logged TIME_IN via {detection_method} for logs_id: {logs_id}")
+            # FIX: Print actual plate text to verify it's not None
+            print(f"SUCCESS: Logged {detected_plate} via {detection_method} (ID: {logs_id})")
             return logs_id
         except mysql.connector.Error as err:
             print(f"ERROR: Database insert failed: {err}")
@@ -121,13 +126,14 @@ def insert_log(vehicle_id=None, owner_id=None, rfid_code=None, detected_plate=No
     except Exception as e:
         print(f"DB Error: {e}")
 
-def check_for_open_log(vehicle_id):
+# FIX: Added function to check duration of stay
+def check_for_open_log_with_time(vehicle_id):
     try:
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         try:
             query = """
-                SELECT tl.time_log_id
+                SELECT tl.time_log_id, tl.time_in, NOW() as db_now
                 FROM time_log tl
                 JOIN logs l ON tl.logs_id = l.logs_id
                 WHERE l.vehicle_id = %s AND tl.time_out IS NULL
@@ -136,14 +142,10 @@ def check_for_open_log(vehicle_id):
             """
             cursor.execute(query, (vehicle_id,))
             return cursor.fetchone()
-        except mysql.connector.Error as err:
-            print(f"ERROR: Database check for open log failed: {err}")
-            return None
         finally:
             cursor.close()
             db_conn.close()
     except Exception as e:
-        print(f"DB Error: {e}")
         return None
 
 def update_time_out(time_log_id):
@@ -160,7 +162,7 @@ def update_time_out(time_log_id):
             db_conn.commit()
             print(f"SUCCESS: Logged TIME_OUT for time_log_id: {time_log_id}")
         except mysql.connector.Error as err:
-            print(f"ERROR: Database update for time_out failed: {err}")
+            print(f"ERROR: Database update failed: {err}")
             db_conn.rollback()
         finally:
             cursor.close()
@@ -216,7 +218,8 @@ def generate_frames():
                             if plate_text:
                                 current_time = datetime.now()
                                 status_text = ""
-                                color = (255, 255, 255)
+                                color = (0, 255, 255)
+
                                 if is_valid_ph_plate(plate_text):
                                     last_seen_time = recently_detected_plates.get(plate_text)
                                     if last_seen_time and (current_time - last_seen_time).total_seconds() < PLATE_LOGGING_COOLDOWN_SECONDS:
@@ -225,7 +228,6 @@ def generate_frames():
                                     else:
                                         recently_detected_plates[plate_text] = current_time
                                         vehicle_and_owner_info = get_owner_info(plate_text)
-                                        
                                         detected_type = class_name.capitalize()
                                         
                                         if vehicle_and_owner_info:
@@ -234,34 +236,43 @@ def generate_frames():
                                             db_vehicle_type = vehicle_and_owner_info.get("vehicle_type")
                                             final_type = db_vehicle_type if db_vehicle_type else detected_type
 
-                                            open_log = check_for_open_log(vehicle_id)                                           
-                                            if open_log:
-                                                time_log_id = open_log['time_log_id']
-                                                update_time_out(time_log_id)
-                                                status_text = f"{plate_text} - Logging Out"
-                                                color = (0, 191, 255)
+                                            # FIX: Use time-based check to prevent instant logout loop
+                                            open_log_data = check_for_open_log_with_time(vehicle_id)
+                                            
+                                            if open_log_data:
+                                                time_in = open_log_data['time_in']
+                                                db_now = open_log_data['db_now']
+                                                duration = (db_now - time_in).total_seconds()
+                                                
+                                                if duration > MIN_STAY_DURATION_FOR_LOGOUT:
+                                                    update_time_out(open_log_data['time_log_id'])
+                                                    status_text = f"{plate_text} - Logging Out"
+                                                    color = (0, 191, 255)
+                                                else:
+                                                    status_text = f"{plate_text} - Authorized (Active)"
+                                                    color = (0, 255, 0)
                                             else:
                                                 if vehicle_and_owner_info.get("owner_id"):
                                                     status_text = f"{plate_text} - Authorized"
                                                     color = (0, 255, 0)
-                                                    print(f"INFO: Authorized plate '{plate_text}' detected. Logging TIME_IN.")
-                                                    insert_log(vehicle_id, vehicle_and_owner_info["owner_id"], rfid_code, detection_method="PLATE", vehicle_type=final_type)
+                                                    # FIX: Added detected_plate=plate_text
+                                                    insert_log(vehicle_id, vehicle_and_owner_info["owner_id"], rfid_code, detected_plate=plate_text, detection_method="PLATE", vehicle_type=final_type)
                                                 else:
                                                     status_text = f"{plate_text} - Unauthorized"
                                                     color = (0, 0, 255)
-                                                    print(f"INFO: Unauthorized (known vehicle) plate '{plate_text}' detected. Logging TIME_IN.")
-                                                    insert_log(vehicle_id=vehicle_id, rfid_code=rfid_code, detection_method="PLATE", vehicle_type=final_type)
+                                                    # FIX: Added detected_plate=plate_text
+                                                    insert_log(vehicle_id=vehicle_id, rfid_code=rfid_code, detected_plate=plate_text, detection_method="PLATE", vehicle_type=final_type)
                                         else:
                                             status_text = f"{plate_text} - Unknown Vehicle"
                                             color = (0, 0, 255)
-                                            print(f"INFO: Unknown plate '{plate_text}' detected. Logging to DB.")
                                             insert_log(detected_plate=plate_text, detection_method="PLATE", vehicle_type=detected_type)
                                 else:
                                     status_text = f"{plate_text} (Invalid Format)"
                                     color = (0, 255, 255)
-                                cv2.rectangle(frame, (abs_x1, abs_y1), (abs_x2, abs_y2), (255, 0, 0), 2)
-                                cv2.putText(frame, status_text, (abs_x1, abs_y1 - 10),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+                                cv2.rectangle(frame, (abs_x1, abs_y1), (abs_x2, abs_y2), color, 2)
+                                cv2.putText(frame, status_text, (abs_x1, abs_y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        
         _, buffer = cv2.imencode('.jpg', frame)
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
@@ -275,64 +286,73 @@ def video_feed():
 
 @app.route("/latest_detection")
 def latest_detection():
-    try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
+    # Use retry logic for stability
+    for attempt in range(2):
         try:
-            cursor.execute("""
-                SELECT 
-                    l.logs_id, l.created_at, l.detected_plate_number, l.detection_method, l.vehicle_type as log_vehicle_type,
-                    t.time_in, t.time_out, t.updated_at,
-                    v.plate_number, v.vehicle_type as db_vehicle_type,
-                    o.f_name, o.l_name, o.contact_number
-                FROM time_log t
-                JOIN logs l ON t.logs_id = l.logs_id
-                LEFT JOIN vehicles v ON l.vehicle_id = v.vehicle_id
-                LEFT JOIN vehicle_owner o ON l.owner_id = o.owner_id
-                ORDER BY t.updated_at DESC
-                LIMIT 1
-            """)
-            result = cursor.fetchone()
+            db_conn = get_db_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            try:
+                cursor.execute("""
+                    SELECT 
+                        l.logs_id, l.created_at, l.detected_plate_number, l.detection_method, l.vehicle_type as log_vehicle_type,
+                        t.time_in, t.time_out, t.updated_at,
+                        v.plate_number, v.vehicle_type as db_vehicle_type,
+                        o.f_name, o.l_name, o.contact_number
+                    FROM time_log t
+                    JOIN logs l ON t.logs_id = l.logs_id
+                    LEFT JOIN vehicles v ON l.vehicle_id = v.vehicle_id
+                    LEFT JOIN vehicle_owner o ON l.owner_id = o.owner_id
+                    ORDER BY t.updated_at DESC
+                    LIMIT 1
+                """)
+                result = cursor.fetchone()
 
-            if result:
-                status = ""
-                vehicle_type = result.get("log_vehicle_type") or result.get("db_vehicle_type") or "Unknown"
+                if result:
+                    status = ""
+                    vehicle_type = result.get("log_vehicle_type") or result.get("db_vehicle_type") or "Unknown"
 
-                if result.get("plate_number"):
-                    plate = result["plate_number"]
-                    if result.get("time_out"):
-                        status = "Logged Out"
-                    elif result.get("f_name"):
-                        status = "Authorized (Logged In)"
+                    if result.get("plate_number"):
+                        plate = result["plate_number"]
+                        if result.get("time_out"):
+                            status = "Logged Out"
+                        elif result.get("f_name"):
+                            status = "Authorized (Logged In)"
+                        else:
+                            status = "Unauthorized (Logged In)"
                     else:
-                        status = "Unauthorized (Logged In)"
-                else:
-                    status = "Unknown Vehicle"
-                    plate = result.get("detected_plate_number")
+                        status = "Unknown Vehicle"
+                        plate = result.get("detected_plate_number")
 
-                return jsonify({
-                    "plate": plate,
-                    "status": status,
-                    "method": result.get("detection_method"),
-                    "vehicle_type": vehicle_type,
-                    "owner": {
-                        "f_name": result.get("f_name"),
-                        "l_name": result.get("l_name"),
-                        "contact_number": result.get("contact_number")
-                    } if result.get("f_name") else None,
-                    "time_in": result["time_in"].isoformat() if result.get("time_in") else None,
-                    "time_out": result["time_out"].isoformat() if result.get("time_out") else None,
-                    "detected_at": result["updated_at"].isoformat() if result.get("updated_at") else None 
-                })
-            else:
-                return jsonify({"message": "No detections yet"}), 404
-        finally:
-            cursor.close()
-            db_conn.close()
-    except Exception as e:
-        print(f"DB Error: {e}")
-        return jsonify({"message": "Database Error"}), 500
+                    return jsonify({
+                        "plate": plate,
+                        "status": status,
+                        "method": result.get("detection_method"),
+                        "vehicle_type": vehicle_type,
+                        "owner": {
+                            "f_name": result.get("f_name"),
+                            "l_name": result.get("l_name"),
+                            "contact_number": result.get("contact_number")
+                        } if result.get("f_name") else None,
+                        "time_in": result["time_in"].isoformat() if result.get("time_in") else None,
+                        "time_out": result["time_out"].isoformat() if result.get("time_out") else None,
+                        "detected_at": result["updated_at"].isoformat() if result.get("updated_at") else None 
+                    })
+                else:
+                    return jsonify({"message": "No detections yet"}), 404
+            finally:
+                cursor.close()
+                db_conn.close()
+            break 
+        except Exception as e:
+            print(f"API Read Error (Attempt {attempt+1}): {e}")
+            if attempt == 1: 
+                return jsonify({"message": "Database Error"}), 500
+            time.sleep(0.5)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+
+
+
+    #
