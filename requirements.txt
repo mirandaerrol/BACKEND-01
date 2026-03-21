@@ -1,5 +1,7 @@
 ﻿flask
 flask-cors
+flask-limiter
+python-dotenv
 ultralytics
 easyocr
 mysql-connector-python
