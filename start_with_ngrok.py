@@ -19,7 +19,6 @@ Copy this URL and set it as VITE_DETECTION_BACKEND_URL in your Laravel .env on R
 
 import os
 import sys
-import subprocess
 import time
 from dotenv import load_dotenv
 
@@ -51,24 +50,27 @@ def start_with_ngrok():
 
     # Start ngrok tunnel
     print(f"\nStarting ngrok tunnel on port {port}...")
-    public_url = ngrok.connect(port, "http")
+    tunnel = ngrok.connect(port, "http")
+    
+    # Extract just the public URL string from the NgrokTunnel object
+    public_url = tunnel.public_url
     
     print("\n" + "=" * 60)
     print(f"  NGROK TUNNEL ACTIVE")
+    print(f"")
     print(f"  Public URL: {public_url}")
     print(f"  Local URL:  http://127.0.0.1:{port}")
     print(f"")
-    print(f"  IMPORTANT: Update your Laravel .env on Railway:")
-    print(f"  VITE_DETECTION_BACKEND_URL={public_url}")
+    print(f"  Test it: {public_url}/health")
     print(f"")
-    print(f"  Then clear Laravel config cache:")
-    print(f"  php artisan config:clear")
+    print(f"  Set this in Railway environment variables:")
+    print(f"  VITE_DETECTION_BACKEND_URL={public_url}")
+    print(f"  DETECTION_BACKEND_API_KEY=change-me-in-production")
     print("=" * 60 + "\n")
 
     # Start the Flask app
-    os.environ["NGROK_URL"] = str(public_url)
+    os.environ["NGROK_URL"] = public_url
     
-    # Import and run the Flask app
     from app import app
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
