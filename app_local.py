@@ -50,6 +50,17 @@ limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per
 # --- API Key ---
 API_KEY = os.environ.get("API_KEY", "change-me-in-production")
 
+# --- Authentication Decorator ---
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        provided_key = request.headers.get("X-API-Key") or request.args.get("api_key")
+        if not provided_key or provided_key != API_KEY:
+            logger.warning(f"Unauthorized API access from {request.remote_addr}")
+            return jsonify({"error": "Unauthorized. Valid API key required."}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 # --- Logging ---
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_FILE = os.environ.get("LOG_FILE", "backend_local.log")
@@ -362,13 +373,107 @@ def health():
     return jsonify({"status": "ok", "db": "connected" if db_pool else "error"})
 
 @app.route("/video_feed/entry")
+@require_api_key
 def video_feed_entry():
     return Response(generate_frames(ENTRY_SOURCE, "ENTRY"), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/video_feed/exit")
+@require_api_key
 def video_feed_exit():
     if EXIT_SOURCE == "": return jsonify({"error": "Exit camera not set"}), 404
     return Response(generate_frames(EXIT_SOURCE, "EXIT"), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+# Backward compatible: /video_feed defaults to entry camera
+@app.route("/video_feed")
+@require_api_key
+def video_feed():
+    """Stream video feed (defaults to ENTRY camera for backward compatibility)."""
+    return Response(generate_frames(ENTRY_SOURCE, "ENTRY"), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+# --- Latest Detection Endpoints ---
+@app.route("/latest_detection")
+@app.route("/latest_detection/<gate>")
+@require_api_key
+@limiter.limit("60 per minute")
+def latest_detection(gate=None):
+    """Get the latest detection. Optional gate filter: 'entry' or 'exit'."""
+    for attempt in range(2):
+        try:
+            db_conn = get_db_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            try:
+                query = """
+                    SELECT 
+                        l.logs_id, l.created_at, l.detected_plate_number, l.detection_method,
+                        l.vehicle_type as log_vehicle_type,
+                        t.time_in, t.time_out, t.updated_at,
+                        v.plate_number, v.vehicle_type as db_vehicle_type,
+                        o.f_name, o.l_name, o.contact_number
+                    FROM time_log t
+                    JOIN logs l ON t.logs_id = l.logs_id
+                    LEFT JOIN vehicles v ON l.vehicle_id = v.vehicle_id
+                    LEFT JOIN vehicle_owner o ON l.owner_id = o.owner_id
+                    ORDER BY t.updated_at DESC
+                    LIMIT 1
+                """
+                cursor.execute(query)
+                result = cursor.fetchone()
+
+                if result:
+                    vehicle_type = result.get("log_vehicle_type") or result.get("db_vehicle_type") or "Unknown"
+                    if result.get("plate_number"):
+                        plate = result["plate_number"]
+                        if result.get("time_out"):
+                            status = "Logged Out"
+                        elif result.get("f_name"):
+                            status = "Authorized (Logged In)"
+                        else:
+                            status = "Unauthorized (Logged In)"
+                    else:
+                        status = "Unknown Vehicle"
+                        plate = result.get("detected_plate_number")
+
+                    return jsonify({
+                        "plate": plate,
+                        "status": status,
+                        "method": result.get("detection_method"),
+                        "vehicle_type": vehicle_type,
+                        "owner": {
+                            "f_name": result.get("f_name"),
+                            "l_name": result.get("l_name"),
+                            "contact_number": result.get("contact_number")
+                        } if result.get("f_name") else None,
+                        "time_in": result["time_in"].isoformat() if result.get("time_in") else None,
+                        "time_out": result["time_out"].isoformat() if result.get("time_out") else None,
+                        "detected_at": result["updated_at"].isoformat() if result.get("updated_at") else None
+                    })
+                else:
+                    return jsonify({"message": "No detections yet"}), 404
+            finally:
+                cursor.close()
+                db_conn.close()
+            break
+        except Exception as e:
+            logger.error(f"API Read Error (Attempt {attempt + 1}): {e}")
+            if attempt == 1:
+                return jsonify({"message": "Database Error"}), 500
+            time.sleep(0.5)
+
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Endpoint not found"}), 404
+
+@app.errorhandler(429)
+def rate_limit_exceeded(e):
+    return jsonify({"error": "Rate limit exceeded."}), 429
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Internal server error: {e}")
+    return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
